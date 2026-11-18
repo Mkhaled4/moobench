@@ -15,7 +15,7 @@ function getAgent() {
   AGENT_VERSION=$(curl ${AGENT_URL_PREFIX}/maven-metadata.xml | grep "$instrumentationTechnology" -A2 | grep '<value>' | sed 's/ *<value>//g' | sed 's/<\/value>//g')
   echo "Path: $VERSION_PATH"
   export AGENT_PATH="${AGENT_URL_PREFIX}/kieker-${AGENT_VERSION}-$instrumentationTechnology.jar"
-  curl "${AGENT_PATH}" > "${AGENT_JAR}"
+  curl "${AGENT_PATH}" >"${AGENT_JAR}"
 
   if [ ! -f "${AGENT_JAR}" ]; then
     error "Kieker download from $AGENT_PATH seems to have failed; no file in $AGENT_JAR present."
@@ -32,7 +32,7 @@ function getAgent() {
 function checkReceiverPort {
   PORT=2345
 
-  if command -v ss > /dev/null 2>&1; then
+  if command -v ss >/dev/null 2>&1; then
     # Linux (ss available)
     if ss -tuln | grep -q ":$PORT"; then
       echo "Port $PORT is used - but the TCP receiver needs to be started there"
@@ -40,7 +40,7 @@ function checkReceiverPort {
     fi
   else
     # MacOS fallback (lsof)
-    if lsof -iTCP:$PORT -sTCP:LISTEN > /dev/null 2>&1; then
+    if lsof -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; then
       echo "Port $PORT is used - but the TCP receiver needs to be started there"
       exit 1
     fi
@@ -77,14 +77,19 @@ function executeExperiment() {
   RESULT_FILE="${RAWFN}-${loop}-${recursion}-${index}.csv"
   LOG_FILE="${RESULTS_DIR}/output_${loop}_${RECURSION_DEPTH}_${index}.txt"
 
+  ENERGY_PARAMS=""
+  if [ "${ENERGY,,}" == "true" ]; then
+    ENERGY_PARAMS="--Energy --energy-output ${RAWFN}-energy.csv"
+  fi
+
   "${MOOBENCH_BIN}" \
     --output-filename "${RESULT_FILE}" \
     --total-calls "${TOTAL_NUM_OF_CALLS}" \
     --method-time "${METHOD_TIME}" \
     --total-threads $THREADS \
     --recursion-depth "${recursion}" \
-    --energy-output "${RAWFN}-energy.csv"\
-    ${MORE_PARAMS} &> "${LOG_FILE}"
+    ${ENERGY_PARAMS} \
+    ${MORE_PARAMS} &>"${LOG_FILE}"
 
   if [ ! -f "${RESULT_FILE}" ]; then
     info "---------------------------------------------------"
@@ -113,7 +118,7 @@ function executeBenchmarkBody() {
     debug "receiver ${RECEIVER[$index]}"
     #sudo netstat -taupen | grep 2345
     checkReceiverPort
-    ${RECEIVER[$index]} >> "${DATA_DIR}/kieker.receiver-${loop}-${index}.log" &
+    ${RECEIVER[$index]} >>"${DATA_DIR}/kieker.receiver-${loop}-${index}.log" &
     RECEIVER_PID=$!
     debug "PID ${RECEIVER_PID}"
   fi

@@ -6,8 +6,8 @@
 
 # ensure the script is sourced
 if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
-    echo "Hey, you should source this script, not execute it!"
-    exit 1
+  echo "Hey, you should source this script, not execute it!"
+  exit 1
 fi
 
 #
@@ -19,16 +19,19 @@ function getSum {
 }
 
 function getDefaultConfiguration {
-    case "$1" in
-        "Kieker-java")        echo "5"; exit ;; 
-        "OpenTelemetry-java") echo "4" ;;
-        "inspectIT-java")     echo "3" ;;
-        "pinpoint-java")      echo "4" ;;
-        "elasticapm-java")    echo "3" ;;
-        "Scouter-java")       echo "2" ;;
-        "Skywalking-java")    echo "2" ;;
-        *)                    echo "-1" ;;
-    esac
+  case "$1" in
+  "Kieker-java")
+    echo "5"
+    exit
+    ;;
+  "OpenTelemetry-java") echo "4" ;;
+  "inspectIT-java") echo "3" ;;
+  "pinpoint-java") echo "4" ;;
+  "elasticapm-java") echo "3" ;;
+  "Scouter-java") echo "2" ;;
+  "Skywalking-java") echo "2" ;;
+  *) echo "-1" ;;
+  esac
 }
 
 ## Clean up raw results
@@ -36,7 +39,7 @@ function cleanupResults() {
   zip -jqr ${RESULTS_DIR}/results.zip ${RAWFN}*
   rm -f ${RAWFN}*
   [ -f ${DATA_DIR}/nohup.out ] && cp ${DATA_DIR}/nohup.out ${RESULTS_DIR}
-  [ -f ${DATA_DIR}/nohup.out ] && > ${DATA_DIR}/nohup.out
+  [ -f ${DATA_DIR}/nohup.out ] && >${DATA_DIR}/nohup.out
 }
 
 function createRLabels() {
@@ -55,10 +58,10 @@ function createRLabels() {
 
 ## Generate Results file
 function runStatistics() {
-   if [ "${TOTAL_NUM_OF_CALLS}" == 1 ]; then
-      export SKIP=0
+  if [ "${TOTAL_NUM_OF_CALLS}" == 1 ]; then
+    export SKIP=0
   else
-      export SKIP=${TOTAL_NUM_OF_CALLS}/2
+    export SKIP=${TOTAL_NUM_OF_CALLS}/2
   fi
    INDICES=$(echo $MOOBENCH_CONFIGURATIONS | tr " " ",")
    echo "Indices: $INDICES"
@@ -89,6 +92,29 @@ source("${RSCRIPT_PATH}")
 EOF
 }
 
+## Generate Energy Results file
+function runEnergyStatistics() {
+  ENERGY_FILE="${RAWFN}-energy.csv"
+  if [ ! -s "${ENERGY_FILE}" ]; then
+    return
+  fi
+  ENERGY_INDICES=$(echo $MOOBENCH_CONFIGURATIONS | tr " " ",")
+  RAPL_MAX_RANGE=$(cat /sys/class/powercap/intel-rapl:0/max_energy_range_uj 2>/dev/null || echo 0)
+  R --vanilla --silent <<EOF
+energy_fn="${ENERGY_FILE}"
+out_report_fn="${RESULTS_DIR}/energy-report.txt"
+out_csv_fn="${RESULTS_DIR}/energy-summary.csv"
+configs.labels=c($LABELS)
+configs.indices=c($ENERGY_INDICES)
+configs.framework_name="${FRAMEWORK_NAME}"
+configs.threads=${THREADS}
+configs.recursion=${RECURSION_DEPTH}
+configs.rapl_max_range=${RAPL_MAX_RANGE}
+results.count=${TOTAL_NUM_OF_CALLS}
+source("${ENERGY_RSCRIPT_PATH}")
+EOF
+}
+
 function startZipkin {
   if [ ! -d "${BASE_DIR}/zipkin" ] || [ ! -f "${BASE_DIR}/zipkin/zipkin.jar" ]; then
     mkdir -p "${BASE_DIR}/zipkin"
@@ -97,7 +123,7 @@ function startZipkin {
   else
     cd "${BASE_DIR}/zipkin"
   fi
-  java -Xmx6g -jar "${BASE_DIR}/zipkin/zipkin.jar" &> "${BASE_DIR}/zipkin/zipkin.txt" &
+  java -Xmx6g -jar "${BASE_DIR}/zipkin/zipkin.jar" &>"${BASE_DIR}/zipkin/zipkin.txt" &
   pid=$!
   sleep 5
   cd "${BASE_DIR}"
@@ -123,9 +149,9 @@ function stopBackgroundProcess {
 }
 
 function writeConfiguration() {
-  uname -a > "${RESULTS_DIR}/configuration.txt"
-  "${JAVA_BIN}" ${JAVA_ARGS} -version 2>> "${RESULTS_DIR}/configuration.txt"
-  cat << EOF >> "${RESULTS_DIR}/configuration.txt"
+  uname -a >"${RESULTS_DIR}/configuration.txt"
+  "${JAVA_BIN}" ${JAVA_ARGS} -version 2>>"${RESULTS_DIR}/configuration.txt"
+  cat <<EOF >>"${RESULTS_DIR}/configuration.txt"
 JAVA_ARGS: ${JAVA_ARGS}
 
 Runtime: circa ${TIME} seconds
@@ -159,7 +185,7 @@ function startCassandra {
 }
 
 function stopCassandra {
-  docker logs cassandra &> "${RESULTS_DIR}/cassandra_logs.txt"
+  docker logs cassandra &>"${RESULTS_DIR}/cassandra_logs.txt"
   docker rm -f cassandra
 }
 
@@ -173,18 +199,18 @@ function waitForDockerStartup {
   echo "Waiting for container $containerName to print log $textToWaitFor"
   attempt=0
   while [ $attempt -le 150 ]; do
-     attempt=$(($attempt + 1))
-     echo "Waiting for container $containerName to print log $textToWaitFor (attempt: $attempt)..."
-     result=$(docker logs $containerName 2>&1)
-     if grep -q "$textToWaitFor" <<< $result; then
-       echo "$containerName contains $textToWaitFor!"
-       break
+    attempt=$(($attempt + 1))
+    echo "Waiting for container $containerName to print log $textToWaitFor (attempt: $attempt)..."
+    result=$(docker logs $containerName 2>&1)
+    if grep -q "$textToWaitFor" <<<$result; then
+      echo "$containerName contains $textToWaitFor!"
+      break
     fi
-     sleep 5
+    sleep 5
   done
 
   result=$(docker logs $containerName 2>&1)
-  if ! grep -q "$textToWaitFor" <<< $result; then
+  if ! grep -q "$textToWaitFor" <<<$result; then
     echo "$containerName did not print $textToWaitFor even after waiting - exiting"
     echo
     echo
@@ -206,12 +232,26 @@ function getStatisticsOfMeasurementFile {
 }
 
 function printIntermediaryResults {
-   loop="$1"
-   for index in $MOOBENCH_CONFIGURATIONS; do
-      RESULT_FILE="${RAWFN}-${loop}-${RECURSION_DEPTH}-${index}.csv"
-      checkFile result "${RESULT_FILE}"
-      info_n "Intermediary results "${TITLE[$index]}" (in ns) "
-      getStatisticsOfMeasurementFile ${RESULT_FILE}
+  loop="$1"
+  ENERGY_FILE="${RAWFN}-energy.csv"
+  for index in $MOOBENCH_CONFIGURATIONS; do
+    RESULT_FILE="${RAWFN}-${loop}-${RECURSION_DEPTH}-${index}.csv"
+    checkFile result "${RESULT_FILE}"
+    info_n "Intermediary results "${TITLE[$index]}" (in ns) "
+    STATS=$(getStatisticsOfMeasurementFile ${RESULT_FILE}) || {
+      echo "${STATS}"
+      exit 1
+    }
+
+    ENERGY_TEXT=""
+    if [ -s "${ENERGY_FILE}" ]; then
+      RESULT_NAME=$(basename "${RESULT_FILE}")
+      ENERGY_UJ=$(awk -F';' -v name="${RESULT_NAME}" '$1 == name {printf "%.0f\n", $3 - $2}' "${ENERGY_FILE}" | tail -n 1)
+      if [ -n "${ENERGY_UJ}" ]; then
+        ENERGY_TEXT=" Energy: ${ENERGY_UJ} µJ"
+      fi
+    fi
+    echo "${STATS}${ENERGY_TEXT}"
   done
 }
 
@@ -239,15 +279,16 @@ function executeAllLoops {
   info "----------------------------------"
 
   for ((i = 1; i <= ${NUM_OF_LOOPS}; i += 1)); do
-     info "## Starting iteration ${i}/${NUM_OF_LOOPS}"
+    info "## Starting iteration ${i}/${NUM_OF_LOOPS}"
 
-     executeBenchmark
-     printIntermediaryResults "${i}"
+    executeBenchmark
+    printIntermediaryResults "${i}"
   done
 
   # Create R labels
   LABELS=$(createRLabels)
   runStatistics
+  runEnergyStatistics
 
   cleanupResults
 
