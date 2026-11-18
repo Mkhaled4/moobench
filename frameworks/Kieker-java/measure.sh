@@ -9,6 +9,13 @@
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
 MAIN_DIR="${BASE_DIR}/../.."
 
+# command-line options
+for arg in "$@"; do
+  case "$arg" in
+  --Energy | --energy) ENERGY=true ;;
+  esac
+done
+
 #
 # source functionality
 #
