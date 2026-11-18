@@ -130,7 +130,7 @@ public final class BenchmarkMain {
         }
         BenchmarkMain.ps.close();
         if (parameter.getEnergyStatus()) {
-            BenchmarkMain.energyStream.println("iteration;start_uj;end_uj;start_time;end_time;time_nano");
+            BenchmarkMain.energyStream.println("iteration;start_uj;end_uj;total_time");
             BenchmarkMain.energyStream.println(parameter.getOutputFile().getName() + ";" + cpu_energy_start + ";"
                     + cpu_energy_end + ";" + totalTime);
             BenchmarkMain.energyStream.close();
